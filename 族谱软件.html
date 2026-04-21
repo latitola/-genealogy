@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>族谱管理软件</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #f5f5f5; }
+        .header { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); padding: 12px 15px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+        .header-left { display: flex; align-items: center; gap: 10px; }
+        .header-left h1 { font-size: 18px; color: white; }
+        .header-right { display: flex; gap: 8px; flex-wrap: wrap; }
+        .main { display: flex; height: calc(100vh - 60px); }
+        .sidebar { width: 280px; background: white; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+        .content { flex: 1; padding: 15px; overflow: auto; }
+        .tree-container { background: white; border-radius: 12px; padding: 15px; min-height: 400px; overflow: auto; position: relative; }
+        #tree-svg { min-height: 400px; transform-origin: top center; transition: transform 0.2s ease; }
+        .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+        .btn-primary { background: #1565C0; color: white; }
+        .btn-secondary { background: #e3f2fd; color: #1a237e; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 15px; }
+        .modal { background: white; border-radius: 12px; width: 100%; max-width: 500px; max-height: 90vh; overflow: auto; }
+        @media (max-width: 768px) { .modal { border-radius: 0; max-height: 100vh; height: 100vh; } }
+        .modal-header { padding: 15px; border-bottom: 1px solid #3a4e9e; background: #1a237e; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h3 { font-size: 16px; color: white; }
+        .modal-body { padding: 15px; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; margin-bottom: 4px; font-weight: 500; font-size: 14px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
+        .form-row { display: flex; gap: 10px; }
+        .form-row .form-group { flex: 1; }
+        .zoom-controls { position: absolute; bottom: 15px; right: 15px; display: flex; gap: 8px; z-index: 100; }
+        .mobile-add-btn { display: none; position: fixed; bottom: 80px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: #1565C0; color: white; border: none; font-size: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 150; cursor: pointer; }
+        @media (max-width: 768px) { .mobile-add-btn { display: block; } }
+        .zoom-btn { width: 44px; height: 44px; border-radius: 50%; border: none; background: #1565C0; color: white; font-size: 20px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2); touch-action: manipulation; }
+        .zoom-btn:hover { background: #0d47a1; }
+        .zoom-btn:active { background: #0a3578; }
+        
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .header { padding: 10px; background: #1a237e; }
+            .header-left h1 { font-size: 16px; color: white; }
+            #mode-badge { font-size: 11px; padding: 3px 8px; margin-left: 8px !important; }
+            .main { flex-direction: column; height: calc(100vh - 100px); }
+            .sidebar { width: 100%; height: 40%; border-right: none; border-bottom: 1px solid #e0e0e0; }
+            .content { padding: 10px; height: 60%; }
+            .tree-container { padding: 60px 10px 10px 10px; min-height: 250px; height: 100%; }
+            #tree-svg { min-height: 250px; width: 100%; }
+            .btn { padding: 6px 10px; font-size: 11px; }
+            #detail-panel { width: 100%; position: fixed; bottom: 0; left: 0; right: 0; max-height: 80vh; overflow: auto; z-index: 200; border-radius: 12px 12px 0 0; box-shadow: 0 -4px 20px rgba(0,0,0,0.15); }
+            .zoom-controls { bottom: 10px; right: 10px; }
+            .zoom-btn { width: 44px; height: 44px; font-size: 20px; }
+            .form-row { flex-direction: column; gap: 0; }
+            .header-right { gap: 4px; }
+        }
+        
+        /* 触摸优化 */
+        @media (pointer: coarse) {
+            .btn, .zoom-btn { min-height: 44px; min-width: 44px; }
+            .person-item { padding: 12px; }
+        }
+        
+        /* 移动端标签 */
+        .mobile-tabs { display: none; }
+        @media (max-width: 768px) {
+            .mobile-tabs { display: flex; }
+            .mobile-tabs .tab-btn { flex: 1; padding: 12px; background: white; border: none; border-bottom: 2px solid transparent; font-size: 14px; cursor: pointer; }
+            .mobile-tabs .tab-btn.active { border-bottom-color: #1a237e; color: #1a237e; font-weight: 500; background: #e8eaf6; }
+            #sidebar-panel.hidden-mobile { display: none; }
+            #tree-panel.hidden-mobile { display: none !important; }
+            #bazi-panel.hidden-mobile { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1>族谱管理</h1>
+            <span id="mode-badge" style="margin-left: 10px; padding: 3px 10px; border-radius: 10px; font-size: 11px; background: #e3f2fd; color: #1a237e;">只读模式</span>
+        </div>
+        <div class="header-right">
+            <button class="btn btn-secondary" onclick="showIntro()">家族介绍</button>
+            <button class="btn btn-secondary" onclick="showContact()">联系方式</button>
+            <button class="btn btn-secondary" onclick="exportData()">导出</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()">导入</button>
+            <input type="file" id="import-file" hidden accept=".json" onchange="importData(this)">
+            <button id="add-person-btn" class="btn btn-primary" onclick="checkEditPermission('add')" style="display: none;">添加</button>
+            <button id="login-btn" class="btn btn-primary" onclick="showLoginModal()">登录</button>
+            <button id="logout-btn" class="btn btn-secondary" onclick="logout()" style="display: none;">退出</button>
+            <button id="change-pwd-btn" class="btn btn-secondary" onclick="showChangePasswordModal()" style="display: none;">改密</button>
+            <button class="btn btn-secondary" onclick="loadDemoData()">示例</button>
+        </div>
+    </div>
+    
+    <!-- 移动端标签切换 -->
+    <div class="mobile-tabs" style="display: none; background: white; border-bottom: 1px solid #e0e0e0;">
+        <button class="tab-btn" onclick="switchTab('intro')" data-tab="intro">家族介绍</button>
+        <button class="tab-btn active" onclick="switchTab('list')" data-tab="list">人物列表</button>
+        <button class="tab-btn" onclick="switchTab('tree')" data-tab="tree">世系图</button>
+        <button class="tab-btn" onclick="switchTab('bazi')" data-tab="bazi">八字算命</button>
+        <button class="tab-btn" onclick="switchTab('contact')" data-tab="contact">联系方式</button>
+    </div>
+    
+    <div class="main">
+        <div id="intro-panel" class="hidden-mobile" style="display: none; flex: 1; padding: 30px; overflow: auto; background: white; border-radius: 12px; margin: 15px;">
+            <h2 style="margin-bottom: 20px; font-size: 24px;">家族介绍</h2>
+            <div style="font-size: 16px; line-height: 1.8; color: #333;">等待编辑</div>
+        </div>
+        
+        <div id="contact-panel" class="hidden-mobile" style="display: none; flex: 1; padding: 30px; overflow: auto; background: white; border-radius: 12px; margin: 15px;">
+            <h2 style="margin-bottom: 20px; font-size: 24px;">联系方式</h2>
+            <div style="font-size: 16px; line-height: 1.8; color: #333;">
+                <p style="margin-bottom: 15px;"><strong>作者联系方式：</strong></p>
+                <p style="font-size: 18px; margin-bottom: 10px;">📱 两挺：15880738111（微信同号）</p>
+            </div>
+        </div>
+        
+        <div id="bazi-panel" class="hidden-mobile" style="display: none; flex: 1; padding: 15px; overflow: auto; background: white; border-radius: 12px; margin: 15px;">
+            <iframe id="bazi-iframe" src="八字算命网站_单文件版.html" style="width: 100%; height: calc(100vh - 120px); border: none; border-radius: 12px;" onload="initBaziFromPerson()"></iframe>
+        </div>
+
+        <div class="sidebar" id="sidebar-panel">
+            <div style="padding: 15px; border-bottom: 1px solid #e0e0e0;">
+                <input type="text" id="search-input" placeholder="搜索人物..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px;" onkeyup="searchPersons()">
+            </div>
+            <div id="person-list" style="flex: 1; overflow: auto; padding: 10px;"></div>
+        </div>
+        
+        <div class="content" id="tree-panel" style="display: flex; gap: 20px;">
+            <div class="tree-container" style="flex: 1;">
+                <h2 style="margin-bottom: 15px; font-size: 18px;">世系图</h2>
+                <div style="overflow: auto; -webkit-overflow-scrolling: touch;">
+                    <svg id="tree-svg"></svg>
+                </div>
+                <button class="mobile-add-btn" onclick="checkEditPermission('add')" title="添加人物">+</button>
+            <div class="zoom-controls">
+                    <button class="zoom-btn" onclick="zoomOut()" title="缩小">-</button>
+                    <button class="zoom-btn" onclick="zoomIn()" title="放大">+</button>
+                    <button class="zoom-btn" onclick="resetZoom()" title="重置" style="font-size: 14px;">⟲</button>
+                </div>
+            </div>
+            <div id="detail-panel" style="width: 280px; background: white; border-radius: 12px; padding: 20px; display: none;">
+                <div id="detail-content"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 修改密码弹窗 -->
+    <div id="change-password-modal" hidden>
+        <div class="modal-overlay">
+            <div class="modal" style="max-width: 350px;">
+                <div class="modal-header">
+                    <h3>修改密码</h3>
+                    <button onclick="closeChangePasswordModal()" style="background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form onsubmit="return doChangePassword()">
+                        <div class="form-group">
+                            <label>当前密码</label>
+                            <input type="password" id="current-password" placeholder="请输入当前密码" required>
+                        </div>
+                        <div class="form-group">
+                            <label>新密码</label>
+                            <input type="password" id="new-password" placeholder="请输入新密码" required>
+                        </div>
+                        <div class="form-group">
+                            <label>确认新密码</label>
+                            <input type="password" id="confirm-password" placeholder="请再次输入新密码" required>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button type="submit" class="btn btn-primary" style="flex: 1;">确认修改</button>
+                            <button type="button" class="btn btn-secondary" onclick="closeChangePasswordModal()" style="flex: 1;">取消</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 登录弹窗 -->
+    <div id="login-modal" hidden>
+        <div class="modal-overlay">
+            <div class="modal" style="max-width: 350px;">
+                <div class="modal-header">
+                    <h3>编辑登录</h3>
+                    <button onclick="closeLoginModal()" style="background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form onsubmit="return doLogin()">
+                        <div class="form-group">
+                            <label>密码</label>
+                            <input type="password" id="login-password" placeholder="请输入编辑密码" required>
+                            <div style="margin-top: 8px; font-size: 12px; color: #999;">初始密码: 123456</div>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button type="submit" class="btn btn-primary" style="flex: 1;">登录</button>
+                            <button type="button" class="btn btn-secondary" onclick="closeLoginModal()" style="flex: 1;">取消</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 添加人物弹窗 -->
+    <div id="person-modal" hidden>
+        <div class="modal-overlay">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 id="person-modal-title">添加人物</h3>
+                    <button onclick="closePersonModal()" style="background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="person-form" onsubmit="return savePerson()">
+                        <input type="hidden" id="person-id">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>姓名 *</label>
+                                <input type="text" id="person-name" required>
+                            </div>
+                            <div class="form-group">
+                                <label>别名（号）</label>
+                                <input type="text" id="person-alias" placeholder="如：太公">
+                            </div>
+                            <div class="form-group">
+                                <label>性别 *</label>
+                                <select id="person-gender" required>
+                                    <option value="male">男</option>
+                                    <option value="female">女</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>父亲（可选）</label>
+                                <select id="person-father"><option value="">-- 无 --</option></select>
+                            </div>
+                            <div class="form-group">
+                                <label>母亲（可选）</label>
+                                <select id="person-mother"><option value="">-- 无 --</option></select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>配偶（可选）</label>
+                            <select id="person-spouse"><option value="">-- 无 --</option></select>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>生辰八字</label>
+                                <input type="text" id="person-birth-date" placeholder="如：甲子年正月初一">
+                            </div>
+                            <div class="form-group">
+                                <label>逝世日期</label>
+                                <input type="text" id="person-death-date" placeholder="如：乙丑年腊月十五">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>头像</label>
+                            <input type="file" id="person-avatar-file" accept="image/*" style="display:none" onchange="handleAvatarUpload(this)">
+                            <div style="display:flex;align-items:center;gap:10px;">
+                                <img id="person-avatar-preview" src="" style="width:60px;height:60px;border-radius:50%;object-fit:cover;border:2px solid #e0e0e0;display:none;background:#f5f5f5;">
+                                <div style="flex:1;">
+                                    <button type="button" onclick="document.getElementById('person-avatar-file').click()" style="padding:8px 16px;background:#2196F3;color:white;border:none;border-radius:6px;cursor:pointer;">上传头像</button>
+                                    <button type="button" onclick="clearAvatarUpload()" style="padding:8px 16px;background:#fff;color:#666;border:1px solid #ddd;border-radius:6px;cursor:pointer;margin-left:5px;">清除</button>
+                                </div>
+                            </div>
+                            <input type="hidden" id="person-avatar">
+                        </div>
+                        <div class="form-group">
+                            <label>个人简介</label>
+                            <textarea id="person-bio" rows="3" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; resize: vertical;"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>备注</label>
+                            <textarea id="person-notes" rows="2" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; resize: vertical;"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>子女（可选，可多选）</label>
+                            <div id="person-children-select" style="max-height: 150px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px;">
+                                <span style="color: #999; font-size: 13px;">请先选择性别</span>
+                            </div>
+                        </div>
+                        <div class="form-group" id="birth-order-section" style="display: none;">
+                            <label>长幼顺序</label>
+                            <select id="person-birth-order" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                                <option value="">-- 请选择 --</option>
+                                <option value="长子">长子</option>
+                                <option value="次子">次子</option>
+                                <option value="三子">三子</option>
+                                <option value="四子">四子</option>
+                                <option value="五子">五子</option>
+                                <option value="六子">六子</option>
+                                <option value="七子">七子</option>
+                                <option value="长女">长女</option>
+                                <option value="次女">次女</option>
+                                <option value="三女">三女</option>
+                                <option value="四女">四女</option>
+                                <option value="五女">五女</option>
+                                <option value="六女">六女</option>
+                                <option value="七女">七女</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button type="submit" class="btn btn-primary" style="flex: 1;">保存</button>
+                            <button type="button" class="btn btn-secondary" onclick="closePersonModal()" style="flex: 1;">取消</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var persons = [];
+        var relationships = [];
+        var isLoading = false;
+
+        function loadFromServer() {
+            console.log('开始加载本地数据...');
+            persons = JSON.parse(localStorage.getItem('genealogy_persons') || '[]');
+            relationships = JSON.parse(localStorage.getItem('genealogy_relationships') || '[]');
+            renderPersonList();
+            renderTree();
+            console.log('界面已渲染, 当前:', persons.length, '人物');
+        }
+
+        function saveToServer() {
+            if (isLoading) return;
+            localStorage.setItem('genealogy_persons', JSON.stringify(persons));
+            localStorage.setItem('genealogy_relationships', JSON.stringify(relationships));
+        }
+
+        // 启动时加载数据
+        loadFromServer();
+
+        var collapsedFamilies = {};        var currentZoom = 1;
+        var DEFAULT_PASSWORD = '123456';
+        var isEditMode = false;
+        
+        // 获取当前密码（从localStorage或默认值）
+        function getCurrentPassword() {
+            return localStorage.getItem('genealogy_password') || DEFAULT_PASSWORD;
+        }
+        
+        // 检查登录状态
+        function checkLoginStatus() {
+            var loggedIn = sessionStorage.getItem('genealogy_edit_mode') === 'true';
+            if (loggedIn) {
+                enableEditMode();
+            } else {
+                disableEditMode();
+            }
+        }
+        
+        function showLoginModal() {
+            document.getElementById('login-modal').hidden = false;
+            document.getElementById('login-password').value = '';
+            document.getElementById('login-password').focus();
+        }
+        
+        function closeLoginModal() {
+            document.getElementById('login-modal').hidden = true;
+        }
+        
+        function doLogin() {
+            var password = document.getElementById('login-password').value;
+            if (password === getCurrentPassword()) {
+                sessionStorage.setItem('genealogy_edit_mode', 'true');
+                enableEditMode();
+                closeLoginModal();
+                alert('登录成功，现在可以编辑族谱了！');
+            } else {
+                alert('密码错误！');
+            }
+            return false;
+        }
+        
+        function logout() {
+            sessionStorage.removeItem('genealogy_edit_mode');
+            disableEditMode();
+            alert('已退出编辑模式');
+        }
+        
+        function enableEditMode() {
+            isEditMode = true;
+            document.getElementById('mode-badge').textContent = '编辑模式';
+            document.getElementById('mode-badge').style.background = '#e8f5e9';
+            document.getElementById('mode-badge').style.color = '#4CAF50';
+            document.getElementById('add-person-btn').style.display = 'inline-block';
+            document.getElementById('login-btn').style.display = 'none';
+            document.getElementById('logout-btn').style.display = 'inline-block';
+            document.getElementById('change-pwd-btn').style.display = 'inline-block';
+            
+            // 刷新详情面板（如果有打开的话）
+            var detailPanel = document.getElementById('detail-panel');
+            if (detailPanel.style.display !== 'none') {
+                // 重新获取当前显示的人物ID并刷新
+                var currentPersonId = detailPanel.dataset.currentPersonId;
+                if (currentPersonId) {
+                    showPersonDetail(parseInt(currentPersonId));
+                }
+            }
+        }
+        
+        function showChangePasswordModal() {
+            document.getElementById('change-password-modal').hidden = false;
+            document.getElementById('current-password').value = '';
+            document.getElementById('new-password').value = '';
+            document.getElementById('confirm-password').value = '';
+            document.getElementById('current-password').focus();
+        }
+        
+        function closeChangePasswordModal() {
+            document.getElementById('change-password-modal').hidden = true;
+        }
+        
+        function doChangePassword() {
+            var currentPwd = document.getElementById('current-password').value;
+            var newPwd = document.getElementById('new-password').value;
+            var confirmPwd = document.getElementById('confirm-password').value;
+            
+            // 验证当前密码
+            if (currentPwd !== getCurrentPassword()) {
+                alert('当前密码错误！');
+                return false;
+            }
+            
+            // 验证新密码
+            if (newPwd.length < 4) {
+                alert('新密码至少需要4位！');
+                return false;
+            }
+            
+            // 验证确认密码
+            if (newPwd !== confirmPwd) {
+                alert('两次输入的新密码不一致！');
+                return false;
+            }
+            
+            // 保存新密码
+            localStorage.setItem('genealogy_password', newPwd);
+            alert('密码修改成功！');
+            closeChangePasswordModal();
+            return false;
+        }
+        
+        function disableEditMode() {
+            isEditMode = false;
+            document.getElementById('mode-badge').textContent = '只读模式';
+            document.getElementById('mode-badge').style.background = '#e3f2fd';
+            document.getElementById('mode-badge').style.color = '#2196F3';
+            document.getElementById('add-person-btn').style.display = 'none';
+            document.getElementById('login-btn').style.display = 'inline-block';
+            document.getElementById('logout-btn').style.display = 'none';
+            document.getElementById('change-pwd-btn').style.display = 'none';
+            
+            // 关闭编辑弹窗
+            closePersonModal();
+            closeChangePasswordModal();
+        }
+        
+        function checkEditPermission(action) {
+            if (!isEditMode) {
+                alert('请先点击"编辑登录"输入密码');
+                showLoginModal();
+                return false;
+            }
+            if (action === 'add') {
+                showPersonModal();
+            }
+            return true;
+        }
+        
+        function renderPersonList() {
+            var list = document.getElementById('person-list');
+            var html = '';
+            for (var i = 0; i < persons.length; i++) {
+                var p = persons[i];
+                html += '<div class="person-item" style="padding: 10px; border-bottom: 1px solid #f0f0f0; cursor: pointer;" onclick="showPersonDetail(' + p.id + ')">';
+                html += '<div style="font-weight: 500;">' + p.name + '</div>';
+                html += '<div style="font-size: 12px; color: #999;">' + (p.gender === 'male' ? '男' : '女') + '</div>';
+                html += '</div>';
+            }
+            list.innerHTML = html || '<div style="padding: 20px; text-align: center; color: #999;">暂无人物</div>';
+        }
+        
+        function showPersonModal(id) {
+            // 检查编辑权限
+            if (!isEditMode) {
+                alert('请先点击"编辑登录"输入密码');
+                showLoginModal();
+                return;
+            }
+            document.getElementById('person-modal').hidden = false;
+            document.getElementById('person-modal-title').textContent = id ? '编辑人物' : '添加人物';
+            
+            var fatherSel = document.getElementById('person-father');
+            var motherSel = document.getElementById('person-mother');
+            var spouseSel = document.getElementById('person-spouse');
+            
+            // 填充选择框
+            fatherSel.innerHTML = '<option value="">-- 无 --</option>';
+            motherSel.innerHTML = '<option value="">-- 无 --</option>';
+            spouseSel.innerHTML = '<option value="">-- 无 --</option>';
+            
+            for (var i = 0; i < persons.length; i++) {
+                var p = persons[i];
+                if (p.id === id) continue;
+                var opt = '<option value="' + p.id + '">' + p.name + '</option>';
+                if (p.gender === 'male') fatherSel.innerHTML += opt;
+                else motherSel.innerHTML += opt;
+                spouseSel.innerHTML += opt;
+            }
+            
+            if (id) {
+                // 编辑模式 - 保持现有关系，但可修改
+                var p = persons.find(function(x) { return x.id === id; });
+                if (p) {
+                    document.getElementById('person-id').value = p.id;
+                    document.getElementById('person-name').value = p.name;
+                    document.getElementById('person-alias').value = p.alias || '';
+                    document.getElementById('person-gender').value = p.gender;
+                    document.getElementById('person-birth-date').value = p.birthDate || '';
+                    document.getElementById('person-death-date').value = p.deathDate || '';
+                    document.getElementById('person-avatar').value = p.avatar || '';
+                    if (p.avatar) {
+                        var preview = document.getElementById('person-avatar-preview');
+                        preview.src = p.avatar; preview.style.display = 'block';
+                    } else {
+                        var preview = document.getElementById('person-avatar-preview');
+                        preview.src = ''; preview.style.display = 'none';
+                    }
+                    document.getElementById('person-bio').value = p.bio || '';
+                    document.getElementById('person-notes').value = p.notes || '';
+                    document.getElementById('person-birth-order').value = p.birthOrder || '';
+                    
+                    // 显示长幼顺序选择
+                    document.getElementById('birth-order-section').style.display = 'block';
+                    
+                    // 查找并设置当前父母
+                    for (var i = 0; i < relationships.length; i++) {
+                        if (relationships[i].type === 'parent' && relationships[i].to === p.id) {
+                            var parent = persons.find(function(x) { return x.id === relationships[i].from; });
+                            if (parent) {
+                                if (parent.gender === 'male') fatherSel.value = parent.id;
+                                else motherSel.value = parent.id;
+                            }
+                        }
+                    }
+                    
+                    // 查找并设置当前配偶
+                    for (var i = 0; i < relationships.length; i++) {
+                        if (relationships[i].type === 'spouse') {
+                            if (relationships[i].from === p.id) {
+                                spouseSel.value = relationships[i].to;
+                            } else if (relationships[i].to === p.id) {
+                                spouseSel.value = relationships[i].from;
+                            }
+                        }
+                    }
+                    
+                    // 更新子女选择框（保持现有选择）
+                    updateChildrenSelect(id);
+                }
+            } else {
+                // 添加模式
+                document.getElementById('person-form').reset();
+                document.getElementById('person-id').value = '';
+                document.getElementById('birth-order-section').style.display = 'none';
+                clearAvatarUpload();
+                updateChildrenSelect(null);
+                // 支持添加关系时的预填性别和自动选择关系人
+                if (window._pendingRelative) {
+                    var rel = window._pendingRelative;
+                    var p = persons.find(function(x) { return x.id === rel.personId; });
+                    if (rel.type === 'parent') {
+                        document.getElementById('person-gender').value = p && p.gender === 'male' ? 'female' : 'male';
+                        // 父母关系：将被添加的人的爸爸/妈妈设为当前人
+                        if (p) {
+                            if (p.gender === 'male') document.getElementById('person-father').value = p.id;
+                            else document.getElementById('person-mother').value = p.id;
+                        }
+                    } else if (rel.type === 'spouse') {
+                        document.getElementById('person-gender').value = p && p.gender === 'male' ? 'female' : 'male';
+                        // 配偶关系：自动选择当前人为配偶
+                        document.getElementById('person-spouse').value = rel.personId;
+                    } else if (rel.type === 'child') {
+                        document.getElementById('person-gender').value = p ? p.gender : 'male';
+                        // 儿女关系：自动设当前人为父母之一
+                        if (p) {
+                            if (p.gender === 'male') document.getElementById('person-father').value = p.id;
+                            else document.getElementById('person-mother').value = p.id;
+                        }
+                    } else if (rel.type === 'sibling') {
+                        document.getElementById('person-gender').value = 'male';
+                        // 兄弟姐妹关系：设当前人为兄弟姐妹（同父母）
+                        if (p) {
+                            document.getElementById('person-father').value = '';
+                            document.getElementById('person-mother').value = '';
+                        }
+                    }
+                }
+            }
+        }
+        
+        function updateChildrenSelect(currentPersonId) {
+            var container = document.getElementById('person-children-select');
+            var gender = document.getElementById('person-gender').value;
+            
+            if (!gender) {
+                container.innerHTML = '<span style="color: #999; font-size: 13px;">请先选择性别</span>';
+                return;
+            }
+            
+            var existingChildren = [];
+            if (currentPersonId) {
+                for (var i = 0; i < relationships.length; i++) {
+                    if (relationships[i].type === 'parent' && relationships[i].from === parseInt(currentPersonId)) {
+                        existingChildren.push(relationships[i].to);
+                    }
+                }
+            }
+            
+            var html = '';
+            var hasOptions = false;
+            for (var i = 0; i < persons.length; i++) {
+                var p = persons[i];
+                if (p.id === currentPersonId) continue;
+                
+                var isChild = existingChildren.indexOf(p.id) !== -1;
+                
+                var hasParent = false;
+                for (var j = 0; j < relationships.length; j++) {
+                    if (relationships[j].type === 'parent' && relationships[j].to === p.id) {
+                        var parent = persons.find(function(x) { return x.id === relationships[j].from; });
+                        if (parent && parent.gender === gender && parent.id !== parseInt(currentPersonId || 0)) {
+                            hasParent = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (isChild || !hasParent) {
+                    hasOptions = true;
+                    var birthOrderLabel = '';
+                    if (p.birthOrder) {
+                        birthOrderLabel = ' <span style="color: #2196F3; font-size: 12px;">(' + p.birthOrder + ')</span>';
+                    }
+                    html += '<label style="display: block; margin-bottom: 8px; cursor: pointer;">';
+                    html += '<input type="checkbox" name="person-children" value="' + p.id + '"' + (isChild ? ' checked' : '') + ' style="margin-right: 8px;">';
+                    html += (p.gender === 'male' ? '👦 ' : '👧 ') + p.name + birthOrderLabel;
+                    html += '</label>';
+                }
+            }
+            
+            container.innerHTML = hasOptions ? html : '<span style="color: #999; font-size: 13px;">暂无可选子女</span>';
+        }
+        
+        document.getElementById('person-gender').onchange = function() {
+            var id = document.getElementById('person-id').value;
+            updateChildrenSelect(id ? parseInt(id) : null);
+        };
+        
+        function closePersonModal() {
+            document.getElementById('person-modal').hidden = true;
+        }
+
+        function handleAvatarUpload(input) {
+            var file = input.files[0];
+            if (!file) return;
+            if (file.size > 2 * 1024 * 1024) { alert('图片不能超过2MB'); return; }
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var base64 = e.target.result;
+                document.getElementById('person-avatar').value = base64;
+                var preview = document.getElementById('person-avatar-preview');
+                preview.src = base64;
+                preview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearAvatarUpload() {
+            document.getElementById('person-avatar-file').value = '';
+            document.getElementById('person-avatar').value = '';
+            var preview = document.getElementById('person-avatar-preview');
+            preview.src = ''; preview.style.display = 'none';
+        }
+
+        function savePerson() {
+            var id = document.getElementById('person-id').value;
+            var person = {
+                id: id ? parseInt(id) : Date.now(),
+                name: document.getElementById('person-name').value,
+                alias: document.getElementById('person-alias').value,
+                gender: document.getElementById('person-gender').value,
+                birthDate: document.getElementById('person-birth-date').value,
+                deathDate: document.getElementById('person-death-date').value,
+                birthOrder: document.getElementById('person-birth-order').value,
+                avatar: document.getElementById('person-avatar').value,
+                bio: document.getElementById('person-bio').value,
+                notes: document.getElementById('person-notes').value
+            };
+            
+            if (id) {
+                for (var i = 0; i < persons.length; i++) {
+                    if (persons[i].id === parseInt(id)) {
+                        persons[i] = person;
+                        break;
+                    }
+                }
+                relationships = relationships.filter(function(r) {
+                    if (r.from !== parseInt(id) && r.to !== parseInt(id)) return true;
+                    if (r.to === parseInt(id) && r.type === 'parent') return false;
+                    if ((r.from === parseInt(id) || r.to === parseInt(id)) && r.type === 'spouse') return false;
+                    return true;
+                });
+                relationships = relationships.filter(function(r) {
+                    return !(r.from === parseInt(id) && r.type === 'parent');
+                });
+            } else {
+                persons.push(person);
+            }
+            
+            var fatherId = document.getElementById('person-father').value;
+            var motherId = document.getElementById('person-mother').value;
+            var spouseId = document.getElementById('person-spouse').value;
+            
+            if (fatherId) relationships.push({from: parseInt(fatherId), to: person.id, type: 'parent'});
+            if (motherId) relationships.push({from: parseInt(motherId), to: person.id, type: 'parent'});
+            if (spouseId) relationships.push({from: person.id, to: parseInt(spouseId), type: 'spouse'});
+            
+            var childrenCheckboxes = document.querySelectorAll('input[name="person-children"]:checked');
+            for (var i = 0; i < childrenCheckboxes.length; i++) {
+                relationships.push({from: person.id, to: parseInt(childrenCheckboxes[i].value), type: 'parent'});
+            }
+            
+            // 处理添加父母/儿女/配偶/兄弟姐妹的快捷操作
+            if (window._pendingRelative) {
+                var rel = window._pendingRelative;
+                window._pendingRelative = null;
+                if (rel.type === 'parent') {
+                    // 新人是当前人的父母
+                    relationships.push({from: person.id, to: rel.personId, type: 'parent'});
+                } else if (rel.type === 'child') {
+                    // 新人是当前人的儿女
+                    relationships.push({from: rel.personId, to: person.id, type: 'parent'});
+                } else if (rel.type === 'spouse') {
+                    // 新人是当前人的配偶
+                    relationships.push({from: rel.personId, to: person.id, type: 'spouse'});
+                } else if (rel.type === 'sibling') {
+                    // 找共同父母，把新人设为当前人的兄弟姐妹（同父母）
+                    var myParents = [];
+                    for (var ri = 0; ri < relationships.length; ri++) {
+                        if (relationships[ri].type === 'parent' && relationships[ri].to === rel.personId) {
+                            myParents.push(relationships[ri].from);
+                        }
+                    }
+                    for (var pi = 0; pi < myParents.length; pi++) {
+                        relationships.push({from: myParents[pi], to: person.id, type: 'parent'});
+                    }
+                }
+            }
+            
+            renderPersonList();
+            renderTree();
+            saveToServer();
+            closePersonModal();
+            return false;
+        }
+        
+        function searchPersons() {
+            var kw = document.getElementById('search-input').value.toLowerCase();
+            var items = document.querySelectorAll('.person-item');
+            for (var i = 0; i < items.length; i++) {
+                var name = items[i].querySelector('div').textContent.toLowerCase();
+                items[i].style.display = name.indexOf(kw) !== -1 ? 'block' : 'none';
+            }
+        }
+        
+        // 世系缓存（renderTree 每次重算后保存，供详情页使用）
+        var _genCache = {}; // familyIdx -> generation number
+        var _rootGen = 17;
+        
+        // ========== 智能分层布局 ==========
+                function renderTree() {
+            var svg = document.getElementById('tree-svg');
+            if (!svg) { console.error('tree-svg not found'); return; }
+            svg.innerHTML = '';
+            if (persons.length === 0) {
+                svg.innerHTML = '<text x="400" y="200" text-anchor="middle" fill="#999">暂无数据</text>';
+                svg.setAttribute('height', 400);
+                svg.setAttribute('width', 800);
+                return;
+            }
+
+            var spouses = {};
+            var childrenMap = {};
+            for (var i = 0; i < relationships.length; i++) {
+                var r = relationships[i];
+                if (r.type === 'spouse') {
+                    if (!spouses[r.from]) spouses[r.from] = [];
+                    spouses[r.from].push(r.to);
+                    if (!spouses[r.to]) spouses[r.to] = [];
+                    spouses[r.to].push(r.from);
+                }
+                if (r.type === 'parent') {
+                    if (!childrenMap[r.from]) childrenMap[r.from] = [];
+                    childrenMap[r.from].push(r.to);
+                }
+            }
+
+            var families = [];
+            var personToFamily = {};
+            var processed = {};
+            for (var i = 0; i < persons.length; i++) {
+                var p = persons[i];
+                if (processed[p.id]) continue;
+                var husbandId = p.gender === 'male' ? p.id : (spouses[p.id] ? spouses[p.id][0] : null);
+                var wifeId = p.gender === 'female' ? p.id : (spouses[p.id] ? spouses[p.id][0] : null);
+                var children = [];
+                if (husbandId && childrenMap[husbandId]) children = children.concat(childrenMap[husbandId]);
+                if (wifeId && childrenMap[wifeId]) {
+                    for (var j = 0; j < childrenMap[wifeId].length; j++) {
+                        if (children.indexOf(childrenMap[wifeId][j]) === -1) children.push(childrenMap[wifeId][j]);
+                    }
+                }
+                families.push({ husband: husbandId, wife: wifeId, children: children, x: 0, y: 0 });
+                var idx = families.length - 1;
+                if (husbandId) { processed[husbandId] = true; personToFamily[husbandId] = idx; }
+                if (wifeId) { processed[wifeId] = true; personToFamily[wifeId] = idx; }
+            }
+
+            for (var i = 0; i < families.length; i++) {
+                families[i].childFamilies = [];
+                for (var j = 0; j < families[i].children.length; j++) {
+                    var cfi = personToFamily[families[i].children[j]];
+                    if (cfi !== undefined && cfi !== i && families[i].childFamilies.indexOf(cfi) === -1)
+                        families[i].childFamilies.push(cfi);
+                }
+            }
+
+            var nodeW = 60, nodeH = 100, spouseGap = 15, levelH = 120, siblingGap = 10;
+            var positions = {};
+
+            var roots = [];
+            for (var i = 0; i < families.length; i++) {
+                var hasParent = false;
+                if (families[i].husband) {
+                    for (var j = 0; j < relationships.length; j++) {
+                        if (relationships[j].type === 'parent' && relationships[j].to === families[i].husband) { hasParent = true; break; }
+                    }
+                }
+                if (!hasParent && families[i].wife) {
+                    for (var j = 0; j < relationships.length; j++) {
+                        if (relationships[j].type === 'parent' && relationships[j].to === families[i].wife) { hasParent = true; break; }
+                    }
+                }
+                if (!hasParent) roots.push(i);
+            }
+
+            function calcSW(fi) {
+                var f = families[fi];
+                if (!f) return nodeW;
+                var sw = (f.husband && f.wife) ? nodeW * 2 + spouseGap : (f.husband || f.wife ? nodeW : 0);
+                if (f.childFamilies.length === 0) return Math.max(sw, nodeW);
+                if (collapsedFamilies[fi]) return Math.max(sw, nodeW);
+                var cw = 0;
+                for (var i = 0; i < f.childFamilies.length; i++) {
+                    cw += calcSW(f.childFamilies[i]);
+                    if (i < f.childFamilies.length - 1) cw += siblingGap;
+                }
+                return Math.max(sw, cw);
+            }
+
+            function layout(fi, xMin, xMax) {
+                var f = families[fi];
+                if (!f) return;
+                var center = (xMin + xMax) / 2;
+                var selfW = (f.husband && f.wife) ? nodeW * 2 + spouseGap : (f.husband || f.wife ? nodeW : 0);
+                if (f.husband) positions[f.husband] = { x: center - (f.wife ? selfW / 2 - nodeW / 2 : 0), y: f.y };
+                if (f.wife) positions[f.wife] = { x: center + (f.husband ? selfW / 2 - nodeW / 2 : 0), y: f.y };
+                f.x = center;
+                if (f.childFamilies.length > 0 && !collapsedFamilies[fi]) {
+                    var childTotalSW = 0;
+                    for (var i = 0; i < f.childFamilies.length; i++) {
+                        childTotalSW += calcSW(f.childFamilies[i]);
+                        if (i < f.childFamilies.length - 1) childTotalSW += siblingGap;
+                    }
+                    var childLeft = center - childTotalSW / 2;
+                    for (var i = 0; i < f.childFamilies.length; i++) {
+                        var cfi = f.childFamilies[i];
+                        var cfsw = calcSW(cfi);
+                        families[cfi].y = f.y + levelH;
+                        layout(cfi, childLeft, childLeft + cfsw);
+                        childLeft += cfsw + siblingGap;
+                    }
+                }
+            }
+
+            var queue = roots.slice();
+            for (var qi = 0; qi < queue.length; qi++) {
+                var fi = queue[qi];
+                var f = families[fi];
+                f.y = 120;
+                if (f.childFamilies.length > 0 && !collapsedFamilies[fi]) {
+                    for (var ci = 0; ci < f.childFamilies.length; ci++) {
+                        var cfi = f.childFamilies[ci];
+                        if (families[cfi].y === 0) {
+                            families[cfi].y = f.y + levelH;
+                            queue.push(cfi);
+                        }
+                    }
+                }
+            }
+
+            // 计算世代（根 = ROOT_GEN 世，往下递增）
+            var ROOT_GEN = 17;
+            var personGen = {}; // personId -> generation number
+            var genQueue = roots.slice();
+            for (var qi = 0; qi < genQueue.length; qi++) {
+                var fi = genQueue[qi];
+                personGen[fi] = personGen[fi] || ROOT_GEN;
+                if (!collapsedFamilies[fi]) {
+                    for (var ci = 0; ci < families[fi].childFamilies.length; ci++) {
+                        var cfi = families[fi].childFamilies[ci];
+                        if (personGen[cfi] === undefined) {
+                            personGen[cfi] = personGen[fi] + 1;
+                            genQueue.push(cfi);
+                        }
+                    }
+                }
+            }
+
+            var rootLeft = 50;
+            for (var ri = 0; ri < roots.length; ri++) {
+                var rsw = calcSW(roots[ri]);
+                layout(roots[ri], rootLeft, rootLeft + rsw);
+                rootLeft += rsw + siblingGap;
+            }
+
+            var maxX = 0, maxY = 0, minX = Infinity;
+            for (var pid in positions) {
+                maxX = Math.max(maxX, positions[pid].x + nodeW);
+                maxY = Math.max(maxY, positions[pid].y + nodeH);
+                minX = Math.min(minX, positions[pid].x);
+            }
+            var offsetX = minX < Infinity ? minX - 60 : 0;
+            for (var pid in positions) { positions[pid].x -= offsetX; }
+
+            for (var i = 0; i < families.length; i++) {
+                var f = families[i];
+                if (f.childFamilies.length === 0 || collapsedFamilies[i]) continue;
+                var pX = f.x, pY = f.y + nodeH / 2;
+                for (var j = 0; j < f.childFamilies.length; j++) {
+                    var cf = families[f.childFamilies[j]];
+                    if (!cf) continue;
+                    var cX = cf.x, cY = cf.y - nodeH / 2;
+                    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('d', 'M' + pX + ',' + pY + ' C' + pX + ',' + ((pY+cY)/2) + ' ' + cX + ',' + ((pY+cY)/2) + ' ' + cX + ',' + cY);
+                    path.setAttribute('fill', 'none');
+                    path.setAttribute('stroke', '#5C6BC0');
+                    path.setAttribute('stroke-width', '2.5');
+                    svg.appendChild(path);
+                }
+            }
+
+            for (var i = 0; i < families.length; i++) {
+                var f = families[i];
+                var drawN = function(personId, fi, genLabel) {
+                    if (!positions[personId]) return;
+                    var p = persons.find(function(x) { return x.id === personId; });
+                    if (!p) return;
+                    var px = positions[personId].x, py = positions[personId].y;
+                    var isC = !!collapsedFamilies[fi];
+                    var cc = families[fi].childFamilies.length;
+                    var gen = genLabel; // genLabel = '第X世' or '配偶'
+                    var isGenNumber = (typeof genLabel === 'number');
+                    var fill2 = p.gender === 'male' ? '#e3f2fd' : '#fce4ec';
+                    var stroke2 = p.gender === 'male' ? '#1565C0' : '#7B1FA2';
+
+                    // 竖长方形节点背景 [x-25, y-45, 50, 90]
+                    var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    g.style.cursor = 'pointer';
+                    var rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    rect.setAttribute('x', px - 30); rect.setAttribute('y', py - 52);
+                    rect.setAttribute('width', 60); rect.setAttribute('height', 105);
+                    rect.setAttribute('rx', 10); rect.setAttribute('fill', fill2);
+                    rect.setAttribute('stroke', stroke2); rect.setAttribute('stroke-width', '2');
+                    g.appendChild(rect);
+
+                    // 上方：圆形头像（36x36，圆心在顶部居中）
+                    if (p.avatar) {
+                        var img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+                        img.setAttribute('x', px - 22); img.setAttribute('y', py - 50);
+                        img.setAttribute('width', 44); img.setAttribute('height', 44);
+                        img.setAttribute('href', p.avatar);
+                        var clip = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+                        clip.setAttribute('id', 'clip_' + personId);
+                        var cr = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                        cr.setAttribute('x', px - 22); cr.setAttribute('y', py - 50);
+                        cr.setAttribute('width', 44); cr.setAttribute('height', 44);
+                        cr.setAttribute('rx', 4);
+                        clip.appendChild(cr);
+                        g.appendChild(clip);
+                        img.setAttribute('clip-path', 'url(#clip_' + personId + ')');
+                        g.appendChild(img);
+                    } else {
+                        var av = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        av.setAttribute('x', px); av.setAttribute('y', py - 16);
+                        av.setAttribute('text-anchor', 'middle');
+                        av.setAttribute('font-size', '28'); av.setAttribute('font-family', 'sans-serif');
+                        av.textContent = p.gender === 'male' ? '👨' : '👩';
+                        g.appendChild(av);
+                    }
+
+                    // 中间：名字（居中）
+                    var nameTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    nameTxt.setAttribute('x', px); nameTxt.setAttribute('y', py + 12);
+                    nameTxt.setAttribute('text-anchor', 'middle');
+                    nameTxt.setAttribute('font-size', '12'); nameTxt.setAttribute('fill', '#333');
+                    nameTxt.setAttribute('font-family', 'sans-serif'); nameTxt.setAttribute('font-weight', 'bold');
+                    nameTxt.setAttribute('dominant-baseline', 'middle');
+                    nameTxt.textContent = p.name.length > 5 ? p.name.substring(0, 5) : p.name;
+                    g.appendChild(nameTxt);
+
+                    // 下方：第X世 或 配偶（底部居中，蓝色背景）
+                    var genBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    genBg.setAttribute('x', px - 26); genBg.setAttribute('y', py + 24);
+                    genBg.setAttribute('width', 52); genBg.setAttribute('height', 20);
+                    genBg.setAttribute('rx', 9);
+                    genBg.setAttribute('fill', isGenNumber ? stroke2 : '#7B1FA2');
+                    g.appendChild(genBg);
+                    var genTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    genTxt.setAttribute('x', px); genTxt.setAttribute('y', py + 39);
+                    genTxt.setAttribute('text-anchor', 'middle');
+                    genTxt.setAttribute('font-size', '10'); genTxt.setAttribute('fill', 'white');
+                    genTxt.setAttribute('font-family', 'sans-serif'); genTxt.setAttribute('font-weight', 'bold');
+                    genTxt.textContent = isGenNumber ? ('第' + gen + '世') : gen;
+                    g.appendChild(genTxt);
+
+                    // 收缩按钮
+                    if (cc > 0) {
+                        var btnG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                        btnG.style.cursor = 'pointer';
+                        var btn = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                        btn.setAttribute('cx', px + 30); btn.setAttribute('cy', py - 52);
+                        btn.setAttribute('r', 12); btn.setAttribute('fill', isC ? '#4CAF50' : '#ff9800');
+                        btnG.appendChild(btn);
+                        var btnT = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        btnT.setAttribute('x', px + 30); btnT.setAttribute('y', py - 48);
+                        btnT.setAttribute('text-anchor', 'middle'); btnT.setAttribute('font-size', '10');
+                        btnT.setAttribute('fill', 'white'); btnT.setAttribute('font-family', 'sans-serif');
+                        btnT.setAttribute('font-weight', 'bold');
+                        btnT.textContent = isC ? '+' + cc : '−';
+                        btnG.appendChild(btnT);
+                        btnG.onclick = function(e) {
+                            e.stopPropagation();
+                            collapsedFamilies[fi] = !collapsedFamilies[fi];
+                            renderTree();
+                        };
+                        g.appendChild(btnG);
+                    }
+
+                    // 配偶连接线
+                    if (families[fi].husband && families[fi].wife) {
+                        var hp = positions[families[fi].husband], wp = positions[families[fi].wife];
+                        if (hp && wp) {
+                            var ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                            ln.setAttribute('x1', hp.x + 30); ln.setAttribute('y1', hp.y);
+                            ln.setAttribute('x2', wp.x - 30); ln.setAttribute('y2', wp.y);
+                            ln.setAttribute('stroke', '#4A148C'); ln.setAttribute('stroke-width', '2.5');
+                            ln.setAttribute('stroke-dasharray', '4,3');
+                            svg.insertBefore(ln, svg.firstChild);
+                            var mk1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                            mk1.setAttribute('cx', hp.x + 30); mk1.setAttribute('cy', hp.y);
+                            mk1.setAttribute('r', 3); mk1.setAttribute('fill', '#7B1FA2');
+                            svg.insertBefore(mk1, svg.firstChild);
+                            var mk2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                            mk2.setAttribute('cx', wp.x - 30); mk2.setAttribute('cy', wp.y);
+                            mk2.setAttribute('r', 3); mk2.setAttribute('fill', '#7B1FA2');
+                            svg.insertBefore(mk2, svg.firstChild);
+                        }
+                    }
+
+                    g.onclick = function() { showPersonDetail(personId); };
+                    svg.appendChild(g);
+                };
+
+                if (families[i].husband) drawN(families[i].husband, i, personGen[i]);
+                if (families[i].wife) {
+                    var wifeIsBlood = false;
+                    for (var pId in childrenMap) {
+                        if (childrenMap[pId].indexOf(families[i].wife) !== -1) { wifeIsBlood = true; break; }
+                    }
+                    drawN(families[i].wife, i, wifeIsBlood ? personGen[i] : '配偶');
+                }
+            }
+
+            svg.setAttribute('height', Math.max(400, maxY + 150));
+            svg.setAttribute('width', Math.max(800, maxX + 150));
+            svg.style.minWidth = Math.max(800, maxX + 150) + 'px';
+            svg.style.minHeight = Math.max(400, maxY + 150) + 'px';
+            // 保存世代缓存供 showPersonDetail 使用
+            for (var pid in personGen) { _genCache[pid] = personGen[pid]; }
+            _rootGen = ROOT_GEN;
+        }
+
+
+        // 缩放功能
+        function zoomIn() { currentZoom = Math.min(currentZoom + 0.2, 2); applyZoom(); }
+        function zoomOut() { currentZoom = Math.max(currentZoom - 0.2, 0.4); applyZoom(); }
+        function resetZoom() { currentZoom = 1; panX = 0; panY = 0; applyZoom(); }
+        function applyZoom() {
+            var svg = document.getElementById('tree-svg');
+            svg.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + currentZoom + ')';
+            svg.style.willChange = 'transform';
+        }
+        var panX = 0, panY = 0, rafPending = false;
+        var isDragging = false, lastX = 0, lastY = 0;
+        var treeContainer = document.querySelector('.tree-container');
+        treeContainer.addEventListener('mousedown', function(e) {
+            if (e.button !== 0) return;
+            isDragging = true; lastX = e.clientX; lastY = e.clientY;
+            treeContainer.style.cursor = 'grabbing';
+        });
+        document.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+            panX += e.clientX - lastX; panY += e.clientY - lastY;
+            lastX = e.clientX; lastY = e.clientY;
+            if (!rafPending) { rafPending = true; requestAnimationFrame(function() { applyZoom(); rafPending = false; }); }
+        });
+        document.addEventListener('mouseup', function() { isDragging = false; treeContainer.style.cursor = ''; });
+        var lastTouchDist = 0;
+        treeContainer.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) { isDragging = true; lastX = e.touches[0].clientX; lastY = e.touches[0].clientY; }
+            if (e.touches.length === 2) { lastTouchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); }
+        }, { passive: true });
+        treeContainer.addEventListener('touchmove', function(e) {
+            if (e.touches.length === 2) {
+                var dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                if (lastTouchDist > 0) { var scale = dist / lastTouchDist; if (scale > 1.05) { zoomIn(); lastTouchDist = dist; } else if (scale < 0.95) { zoomOut(); lastTouchDist = dist; } }
+                return;
+            }
+            if (!isDragging || e.touches.length !== 1) return;
+            panX += e.touches[0].clientX - lastX; panY += e.touches[0].clientY - lastY;
+            lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+            if (!rafPending) { rafPending = true; requestAnimationFrame(function() { applyZoom(); rafPending = false; }); }
+        }, { passive: true });
+        treeContainer.addEventListener('touchend', function() { isDragging = false; });
+        
+        document.querySelector('.tree-container').addEventListener('wheel', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                if (e.deltaY < 0) zoomIn(); else zoomOut();
+            }
+        });
+        
+        function showPersonDetail(personId) {
+            var p = persons.find(function(x) { return x.id === personId; });
+            if (!p) return;
+            _lastSelectedPerson = p;
+            
+            var panel = document.getElementById('detail-panel');
+            var content = document.getElementById('detail-content');
+            
+            var html = '<div style="text-align: center; margin-bottom: 20px; position: relative;">';
+            html += '<button onclick="closeDetailPanel()" style="position: absolute; top: -10px; right: -10px; width: 32px; height: 32px; border-radius: 50%; border: none; background: #f0f0f0; cursor: pointer; font-size: 18px;">&times;</button>';
+            if (p.avatar) html += '<img src="' + p.avatar + '" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid ' + (p.gender === 'male' ? '#1565C0' : '#7B1FA2') + ';">';
+            else html += '<div style="width: 80px; height: 80px; border-radius: 50%; background: ' + (p.gender === 'male' ? '#e3f2fd' : '#fce4ec') + '; display: flex; align-items: center; justify-content: center; margin: 0 auto; font-size: 32px;">' + (p.gender === 'male' ? '👨' : '👩') + '</div>';
+            html += '<h3 style="margin-top: 12px; font-size: 18px;">' + p.name + '</h3>';
+            if (p.alias) html += '<div style="color: #888; font-size: 13px; margin-top: 4px;">别名：' + p.alias + '</div>';
+            // 计算世代：找该人物到根的深度，generation = ROOT_GEN + 深度
+            function getPersonDepth(pid) {
+                var visited = {};
+                var depth = 0;
+                var cur = pid;
+                while (cur !== undefined) {
+                    var hasParent = false;
+                    for (var i = 0; i < relationships.length; i++) {
+                        if (relationships[i].type === 'parent' && relationships[i].to === cur) {
+                            var parentId = relationships[i].from;
+                            if (visited[parentId]) { cur = undefined; break; }
+                            visited[cur] = true;
+                            cur = parentId;
+                            depth++;
+                            hasParent = true;
+                            break;
+                        }
+                    }
+                    if (!hasParent) break;
+                }
+                return depth;
+            }
+            var myGen = _rootGen + getPersonDepth(p.id);
+            html += '<span style="display: inline-block; margin-top: 6px; background: ' + (p.gender === 'male' ? '#1565C0' : '#7B1FA2') + '; color: white; padding: 3px 14px; border-radius: 12px; font-size: 12px;">第' + myGen + '世</span> <span style="background: ' + (p.gender === 'male' ? '#e8eaf6' : '#f3e5f5') + '; color: ' + (p.gender === 'male' ? '#1565C0' : '#7B1FA2') + '; padding: 4px 12px; border-radius: 12px; font-size: 12px;">' + (p.gender === 'male' ? '男' : '女') + '</span></div>';
+            
+            html += '<div style="border-top: 1px solid #f0f0f0; padding-top: 15px;">';
+            if (p.birthDate) html += '<div style="margin-bottom: 12px;"><div style="color: #999; font-size: 12px;">生辰八字</div><div>' + p.birthDate + '</div></div>';
+            if (p.deathDate) html += '<div style="margin-bottom: 12px;"><div style="color: #999; font-size: 12px;">逝世日期</div><div>' + p.deathDate + '</div></div>';
+            if (p.bio) html += '<div style="margin-bottom: 12px;"><div style="color: #999; font-size: 12px;">个人简介</div><div style="line-height: 1.5;">' + p.bio + '</div></div>';
+            if (p.notes) html += '<div style="margin-bottom: 12px;"><div style="color: #999; font-size: 12px;">备注</div><div style="line-height: 1.5; color: #666;">' + p.notes + '</div></div>';
+            
+            // 查找关系
+            var father = null, mother = null, spouse = null, children = [];
+            for (var i = 0; i < relationships.length; i++) {
+                if (relationships[i].type === 'parent' && relationships[i].to === p.id) {
+                    var parent = persons.find(function(x) { return x.id === relationships[i].from; });
+                    if (parent) { if (parent.gender === 'male') father = parent; else mother = parent; }
+                }
+                if (relationships[i].type === 'spouse') {
+                    if (relationships[i].from === p.id) spouse = persons.find(function(x) { return x.id === relationships[i].to; });
+                    else if (relationships[i].to === p.id) spouse = persons.find(function(x) { return x.id === relationships[i].from; });
+                }
+                if (relationships[i].type === 'parent' && relationships[i].from === p.id) {
+                    var child = persons.find(function(x) { return x.id === relationships[i].to; });
+                    if (child) children.push(child);
+                }
+            }
+            
+            html += '<div style="margin-top: 15px; border-top: 1px solid #f0f0f0; padding-top: 15px;">';
+            if (father || mother) {
+                html += '<div style="margin-bottom: 12px;"><div style="color: #999; font-size: 12px;">父母</div><div>';
+                if (father) html += '<span style="margin-right: 10px;">👨 ' + father.name + '</span>';
+                if (mother) html += '<span>👩 ' + mother.name + '</span>';
+                html += '</div></div>';
+            }
+            if (spouse) html += '<div style="margin-bottom: 12px;"><div style="color: #999; font-size: 12px;">配偶</div><div>' + (spouse.gender === 'male' ? '👨 ' : '👩 ') + spouse.name + '</div></div>';
+            if (children.length > 0) {
+                html += '<div style="margin-bottom: 12px;"><div style="color: #999; font-size: 12px;">子女 (' + children.length + '人)</div><div>';
+                
+                // 按性别分组
+                var sons = children.filter(function(c) { return c.gender === 'male'; });
+                var daughters = children.filter(function(c) { return c.gender === 'female'; });
+                
+                // 显示儿子
+                for (var i = 0; i < sons.length; i++) {
+                    // 优先使用手动设置的长幼顺序
+                    var title = sons[i].birthOrder;
+                    if (!title) {
+                        // 如果没有手动设置，按默认顺序
+                        var defaultTitles = ['长子', '次子', '三子', '四子', '五子', '六子', '七子'];
+                        var sonIndex = sons.indexOf(sons[i]);
+                        title = sonIndex < defaultTitles.length ? defaultTitles[sonIndex] : '第' + (sonIndex + 1) + '子';
+                    }
+                    html += '<span style="display: inline-block; margin-right: 10px; margin-bottom: 5px; background: #e3f2fd; padding: 4px 10px; border-radius: 12px; font-size: 13px;">👦 ' + title + ' ' + sons[i].name + '</span>';
+                }
+                
+                // 显示女儿
+                for (var i = 0; i < daughters.length; i++) {
+                    // 优先使用手动设置的长幼顺序
+                    var title = daughters[i].birthOrder;
+                    if (!title) {
+                        // 如果没有手动设置，按默认顺序
+                        var defaultTitles = ['长女', '次女', '三女', '四女', '五女', '六女', '七女'];
+                        var daughterIndex = daughters.indexOf(daughters[i]);
+                        title = daughterIndex < defaultTitles.length ? defaultTitles[daughterIndex] : '第' + (daughterIndex + 1) + '女';
+                    }
+                    html += '<span style="display: inline-block; margin-right: 10px; margin-bottom: 5px; background: #fce4ec; padding: 4px 10px; border-radius: 12px; font-size: 13px;">👧 ' + title + ' ' + daughters[i].name + '</span>';
+                }
+                
+                html += '</div></div>';
+            }
+            html += '</div></div>';
+            
+            // 保存当前人物ID到面板
+            panel.dataset.currentPersonId = personId;
+            
+            // 根据模式显示不同按钮
+            if (isEditMode) {
+                html += '<div style="margin-top: 20px;">';
+                html += '<div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px;">';
+                html += '<button class="btn btn-sm" style="background:#8BC34A;color:white;border:none;padding:6px 12px;border-radius:16px;font-size:12px;cursor:pointer;" onclick="addRelative(' + p.id + ', \'parent\')">➕ 添加父母</button>';
+                html += '<button class="btn btn-sm" style="background:#FF9800;color:white;border:none;padding:6px 12px;border-radius:16px;font-size:12px;cursor:pointer;" onclick="addRelative(' + p.id + ', \'child\')">➕ 添加儿女</button>';
+                html += '<button class="btn btn-sm" style="background:#E91E63;color:white;border:none;padding:6px 12px;border-radius:16px;font-size:12px;cursor:pointer;" onclick="addRelative(' + p.id + ', \'spouse\')">➕ 添加配偶</button>';
+                html += '<button class="btn btn-sm" style="background:#9C27B0;color:white;border:none;padding:6px 12px;border-radius:16px;font-size:12px;cursor:pointer;" onclick="addRelative(' + p.id + ', \'sibling\')">➕ 添加兄弟姐妹</button>';
+                html += '</div>';
+                html += '<div style="display: flex; gap: 10px;">';
+                html += '<button class="btn btn-primary" style="flex: 1;" onclick="checkEditPermissionForEdit(' + p.id + ')">编辑</button>';
+                html += '<button class="btn btn-secondary" style="flex: 1;" onclick="checkEditPermissionForDelete(' + p.id + ')">删除</button>';
+                html += '</div>';
+                html += '</div>';
+            } else {
+                html += '<div style="margin-top: 20px; text-align: center; color: #999; font-size: 12px; padding: 10px; background: #f5f5f5; border-radius: 8px;">';
+                html += '🔒 只读模式 - 点击"编辑登录"可进行编辑';
+                html += '</div>';
+            }
+            
+            content.innerHTML = html;
+            panel.style.display = 'block';
+        }
+        
+        function checkEditPermissionForEdit(personId) {
+            if (!isEditMode) {
+                alert('请先点击"编辑登录"输入密码');
+                showLoginModal();
+                return;
+            }
+            showPersonModal(personId);
+        }
+        
+        function checkEditPermissionForDelete(personId) {
+            if (!isEditMode) {
+                alert('请先点击"编辑登录"输入密码');
+                showLoginModal();
+                return;
+            }
+            deletePerson(personId);
+        }
+
+        function addRelative(personId, type) {
+            if (!isEditMode) { alert('请先点击"编辑登录"输入密码'); showLoginModal(); return; }
+            closeDetailPanel();
+            var p = persons.find(function(x) { return x.id === personId; });
+            if (!p) return;
+            // 创建新人物并打开编辑框
+            var newPerson = {
+                id: Date.now(),
+                name: '',
+                gender: type === 'parent' ? (p.gender === 'male' ? 'female' : 'male') : (p.gender),
+                birthDate: '', deathDate: '', birthOrder: '', avatar: '', bio: '', notes: ''
+            };
+            if (type === 'spouse') {
+                newPerson.gender = p.gender === 'male' ? 'female' : 'male';
+            }
+            // 先添加关系，新人会暂存到临时变量
+            window._pendingRelative = { personId: personId, type: type, newPerson: newPerson };
+            showPersonModal(null);
+            document.getElementById('person-name').focus();
+        }
+
+        function closeDetailPanel() {
+            document.getElementById('detail-panel').style.display = 'none';
+        }
+        
+        function deletePerson(personId) {
+            if (!confirm('确定要删除这个人物吗？')) return;
+            persons = persons.filter(function(p) { return p.id !== personId; });
+            relationships = relationships.filter(function(r) { return r.from !== personId && r.to !== personId; });
+            saveToServer();
+            document.getElementById('detail-panel').style.display = 'none';
+            renderPersonList();
+            renderTree();
+        }
+        
+        function showIntro() {
+            var modal = document.getElementById('intro-modal');
+            if (modal) modal.hidden = false;
+        }
+        
+        function closeIntro() {
+            var modal = document.getElementById('intro-modal');
+            if (modal) modal.hidden = true;
+        }
+        
+        function showContact() {
+            var modal = document.getElementById('contact-modal');
+            if (modal) modal.hidden = false;
+        }
+        
+        function closeContact() {
+            var modal = document.getElementById('contact-modal');
+            if (modal) modal.hidden = true;
+        }
+        
+        function exportData() {
+            var data = {persons: persons, relationships: relationships, exportDate: new Date().toISOString()};
+            var blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = '族谱数据_' + new Date().toLocaleDateString() + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function importData(input) {
+            var file = input.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    var data = JSON.parse(e.target.result);
+                    if (data.persons && data.relationships) {
+                        if (confirm('导入将覆盖现有数据，确定继续吗？')) {
+                            persons = data.persons;
+                            relationships = data.relationships;
+                            renderPersonList();
+                            renderTree();
+                            saveToServer();
+                            alert('导入成功！');
+                        }
+                    } else alert('数据格式不正确！');
+                } catch (err) { alert('文件解析失败：' + err.message); }
+            };
+            reader.readAsText(file);
+            input.value = '';
+        }
+        
+        // 移动端标签切换
+        function switchTab(tab) {
+            var sidebar = document.getElementById('sidebar-panel');
+            var treePanel = document.getElementById('tree-panel');
+            var introPanel = document.getElementById('intro-panel');
+            var contactPanel = document.getElementById('contact-panel');
+            var baziPanel = document.getElementById('bazi-panel');
+            var tabBtns = document.querySelectorAll('.tab-btn');
+            
+            // 隐藏intro/contact面板（弹窗版不需要）
+            if (introPanel) introPanel.style.display = 'none';
+            if (contactPanel) contactPanel.style.display = 'none';
+            
+            // 移除所有active状态
+            tabBtns.forEach(function(btn) {
+                btn.classList.remove('active');
+            });
+            
+            if (tab === 'list') {
+                if (sidebar) sidebar.classList.remove('hidden-mobile');
+                if (treePanel) treePanel.classList.add('hidden-mobile');
+                if (baziPanel) baziPanel.classList.add('hidden-mobile');
+                document.querySelector('[data-tab="list"]').classList.add('active');
+            } else if (tab === 'tree') {
+                if (sidebar) sidebar.classList.add('hidden-mobile');
+                if (treePanel) {
+                    treePanel.classList.remove('hidden-mobile');
+                    setTimeout(renderTree, 100);
+                }
+                if (baziPanel) baziPanel.classList.add('hidden-mobile');
+                document.querySelector('[data-tab="tree"]').classList.add('active');
+            } else if (tab === 'intro') {
+                if (sidebar) sidebar.classList.add('hidden-mobile');
+                if (treePanel) treePanel.classList.add('hidden-mobile');
+                if (baziPanel) baziPanel.classList.add('hidden-mobile');
+                showIntro();
+                document.querySelector('[data-tab="intro"]').classList.add('active');
+            } else if (tab === 'contact') {
+                if (sidebar) sidebar.classList.add('hidden-mobile');
+                if (treePanel) treePanel.classList.add('hidden-mobile');
+                if (baziPanel) baziPanel.classList.add('hidden-mobile');
+                showContact();
+                document.querySelector('[data-tab="contact"]').classList.add('active');
+            } else if (tab === 'bazi') {
+                if (sidebar) sidebar.classList.add('hidden-mobile');
+                if (treePanel) treePanel.classList.add('hidden-mobile');
+                if (baziPanel) baziPanel.classList.remove('hidden-mobile');
+                document.querySelector('[data-tab="bazi"]').classList.add('active');
+            }
+        }
+        
+        // 触摸缩放支持
+        var touchStartDistance = 0;
+        var touchStartZoom = 1;
+        
+        var _lastSelectedPerson = null;
+
+// 将当前选中人物的出生日期传给算命页面
+function initBaziFromPerson() {
+    var iframe = document.getElementById('bazi-iframe');
+    if (!iframe) return;
+    var person = _lastSelectedPerson;
+    if (person && person.birth) {
+        iframe.contentWindow.postMessage({
+            type: 'setBirthDate',
+            birth: person.birth,
+            name: person.name || ''
+        }, '*');
+    }
+}
+
+document.querySelector('.tree-container').addEventListener('touchstart', function(e) {
+            if (e.touches.length === 2) {
+                touchStartDistance = Math.hypot(
+                    e.touches[0].pageX - e.touches[1].pageX,
+                    e.touches[0].pageY - e.touches[1].pageY
+                );
+                touchStartZoom = currentZoom;
+            }
+        }, { passive: true });
+        
+        document.querySelector('.tree-container').addEventListener('touchmove', function(e) {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                var distance = Math.hypot(
+                    e.touches[0].pageX - e.touches[1].pageX,
+                    e.touches[0].pageY - e.touches[1].pageY
+                );
+                var scale = distance / touchStartDistance;
+                currentZoom = Math.max(0.4, Math.min(2, touchStartZoom * scale));
+                applyZoom();
+            }
+        }, { passive: false });
+        
+        // 加载示例数据
+        function loadDemoData() {
+            if (persons.length > 0) {
+                if (!confirm('加载示例数据将覆盖现有数据，确定继续吗？')) return;
+            }
+            
+            // 示例数据
+            persons = [
+                { id: 1, name: '张太公', gender: 'male', birthDate: '甲子年正月初一', deathDate: '', birthOrder: '', avatar: '', bio: '家族始祖', notes: '' },
+                { id: 2, name: '张太婆', gender: 'female', birthDate: '乙丑年二月十五', deathDate: '', birthOrder: '', avatar: '', bio: '', notes: '' },
+                { id: 3, name: '张大明', gender: 'male', birthDate: '丙寅年三月初三', deathDate: '', birthOrder: '长子', avatar: '', bio: '', notes: '' },
+                { id: 4, name: '张小明', gender: 'male', birthDate: '丁卯年四月二十', deathDate: '', birthOrder: '次子', avatar: '', bio: '', notes: '' },
+                { id: 5, name: '张小红', gender: 'female', birthDate: '戊辰年五月初五', deathDate: '', birthOrder: '长女', avatar: '', bio: '', notes: '' },
+                { id: 6, name: '张大明妻', gender: 'female', birthDate: '己巳年六月初六', deathDate: '', birthOrder: '', avatar: '', bio: '', notes: '' },
+                { id: 7, name: '张小明妻', gender: 'female', birthDate: '庚午年七月初七', deathDate: '', birthOrder: '', avatar: '', bio: '', notes: '' },
+                { id: 8, name: '张一', gender: 'male', birthDate: '辛未年八月初八', deathDate: '', birthOrder: '长子', avatar: '', bio: '', notes: '' },
+                { id: 9, name: '张二', gender: 'male', birthDate: '壬申年九月初九', deathDate: '', birthOrder: '次子', avatar: '', bio: '', notes: '' },
+                { id: 10, name: '张三', gender: 'female', birthDate: '癸酉年十月初十', deathDate: '', birthOrder: '长女', avatar: '', bio: '', notes: '' }
+            ];
+            
+            relationships = [
+                { from: 1, to: 3, type: 'parent' },
+                { from: 1, to: 4, type: 'parent' },
+                { from: 1, to: 5, type: 'parent' },
+                { from: 2, to: 3, type: 'parent' },
+                { from: 2, to: 4, type: 'parent' },
+                { from: 2, to: 5, type: 'parent' },
+                { from: 1, to: 2, type: 'spouse' },
+                { from: 3, to: 6, type: 'spouse' },
+                { from: 4, to: 7, type: 'spouse' },
+                { from: 3, to: 8, type: 'parent' },
+                { from: 3, to: 9, type: 'parent' },
+                { from: 4, to: 10, type: 'parent' },
+                { from: 6, to: 8, type: 'parent' },
+                { from: 6, to: 9, type: 'parent' },
+                { from: 7, to: 10, type: 'parent' }
+            ];
+            
+            // 注意：示例数据不自动保存到服务器
+            renderPersonList();
+            renderTree();
+            alert('示例数据加载成功！');
+        }
+        
+        // 初始化
+        checkLoginStatus();
+        renderPersonList();
+        renderTree();
+        
+        // 移动端默认显示世系图标签
+        if (window.innerWidth <= 768) {
+            switchTab('tree');
+        }
+    </script>
+    <!-- 家族介绍弹窗 -->
+    <div id="intro-modal" hidden>
+        <div class="modal-overlay" onclick="closeIntro()">
+            <div class="modal" style="max-width: 500px;" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3>家族介绍</h3>
+                    <button onclick="closeIntro()" style="background:none;border:none;font-size:20px;cursor:pointer;">×</button>
+                </div>
+                <div class="modal-body" style="font-size:15px;line-height:1.8;max-height:60vh;overflow:auto;">
+                    <div id="intro-content">等待编辑</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 联系方式弹窗 -->
+    <div id="contact-modal" hidden>
+        <div class="modal-overlay" onclick="closeContact()">
+            <div class="modal" style="max-width: 400px;" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3>联系方式</h3>
+                    <button onclick="closeContact()" style="background:none;border:none;font-size:20px;cursor:pointer;">×</button>
+                </div>
+                <div class="modal-body" style="font-size:15px;line-height:1.8;">
+                    <p style="margin-bottom:10px;"><strong>作者联系方式：</strong></p>
+                    <p style="font-size:16px;">📱 两挺：15880738111（微信同号）</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
